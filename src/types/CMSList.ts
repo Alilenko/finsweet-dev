@@ -94,6 +94,12 @@ export interface CMSList {
   /**
    * An array holding all {@link CMSItem} instances of the list.
    */
+  items: CMSItem[];
+
+  /**
+   * An array holding all unsorted {@link CMSItem} instances of the list.
+   */
+  originalItemsOrder: CMSItem[];
 
   /**
    * Defines the amount of items per page.
@@ -106,39 +112,41 @@ export interface CMSList {
   originalItemsPerPage: number;
 
   /**
-   * An array holding all static {@link CMSItem} instances of the list.
+   * An array holding all valid {@link CMSItem} instances of the list.
+   * Items are set to valid/invalid by `cmsfilter` when performing any filter query.
    */
+  validItems: CMSItem[];
 
   /**
    * Defines if the entire `window.Webflow` instance must be restarted when rendering items.
    * If set, individual modules ('ix2', 'commerce', 'lightbox') will also be restarted.
    */
-  restartWebflow: boolean;
+  restartWebflow: false;
 
   /**
    * Defines if the Webflow `ix2` module must be restarted when rendering items.
    */
-  restartIx: boolean;
+  restartIx: false;
 
   /**
    * Defines if the Webflow `commerce` module must be restarted when rendering items.
    */
-  restartCommerce: boolean;
+  restartCommerce: false;
 
   /**
    * Defines if the Webflow `lightbox` module must be restarted when rendering items.
    */
-  restartLightbox: boolean;
+  restartLightbox: false;
 
   /**
    * Defines if the Webflow `slider` module must be restarted when rendering items.
    */
-  restartSliders: boolean;
+  restartSliders: false;
 
   /**
    * Defines if the Webflow `tabs` module must be restarted when rendering items.
    */
-  restartTabs: boolean;
+  restartTabs: false;
 
   /**
    * Stores new Collection Items in the instance.
@@ -154,17 +162,6 @@ export interface CMSList {
   addItems(itemElements: HTMLElement[], method?: 'unshift' | 'push'): Promise<void>;
 
   /**
-   * Adds a static item to the Collection Instance.
-   * @param itemsData An array of static items data.
-   * @param itemsData.itemElement The new item to store.
-   * @param itemsData.targetIndex The index where to place the new item.
-   * @param itemsData.interactive Defines if the item will be interactive or not.
-   */
-  addStaticItems(
-    itemsData: Array<{ itemElement: HTMLDivElement; targetIndex: number; interactive: boolean }>
-  ): Promise<void>;
-
-  /**
    * Restores the original items order.
    */
   restoreItemsOrder(): void;
@@ -175,7 +172,7 @@ export interface CMSList {
    * @param removeElements Defines if the {@link CMSItem.element} nodes should be removed from the DOM.
    * Defaults to `true`.
    */
-  clearItems(removeElements?: boolean): Promise<void>;
+  clearItems(removeElements?: boolean): void;
 
   /**
    * Recalculates the list object model based on the current props of the items
@@ -186,6 +183,7 @@ export interface CMSList {
    *
    * @returns The rendered items.
    */
+  renderItems(animateItems?: boolean, animateList?: boolean): Promise<CMSItem[]>;
 
   /**
    * Shows / hides the requested element.
@@ -207,36 +205,6 @@ export interface CMSList {
     show?: boolean,
     animate?: boolean
   ): Promise<void>;
-
-  /**
-   * Adds an `Empty State` element to the list.
-   * @param element The element to add.
-   */
-  addEmptyElement(element: HTMLElement): void;
-
-  /**
-   * Adds a `Loader` element to the list.
-   * @param element The element to add.
-   */
-  addLoader(element: HTMLElement): void;
-
-  /**
-   * Adds an `Items Count` element to the list.
-   * @param element The element to add.
-   */
-  addItemsCount(element: HTMLElement): void;
-
-  /**
-   * Adds `Visible Count` elements to the list.
-   * @param totalElement The `total` element to add.
-   * @param fromElement The `from` element to add.
-   * @param toElement The `to` element to add.
-   */
-  addVisibleCount(
-    totalElement?: HTMLElement | null,
-    fromElement?: HTMLElement | null,
-    toElement?: HTMLElement | null
-  ): void;
 
   /**
    * Switches the current page.
@@ -268,8 +236,115 @@ export interface CMSList {
    * @example 'fs-cmsfilter-element="list-2"' // Returns 2.
    */
   getInstanceIndex(key: string): number | undefined;
+}
+
+interface CMSItem {
+  /**
+   * The `Collection Item` element.
+   */
+  element: HTMLDivElement;
 
   /**
-   * Destroys the instance.
+   * The `Collection List` parent element.
    */
+  list: HTMLDivElement;
+
+  /**
+   * The element's current index in the rendered list.
+   */
+  currentIndex?: number;
+
+  /**
+   * The URL of the item's `Template Page`.
+   */
+  href?: string;
+
+  /**
+   * The item's properties.
+   * Defined by {@link CMSItemProps}.
+   */
+  props: CMSItemProps;
+
+  /**
+   * Defines if the item is valid to be rendered.
+   */
+  valid: boolean;
+
+  /**
+   * Promise that fulfills when the item is rendered to the DOM.
+   */
+  rendering?: Promise<void>;
+
+  /**
+   * Promise that fulfills when the item's render animation is fully finished.
+   */
+  animating?: Promise<void>;
+
+  /**
+   * Defines if the item needs a Webflow modules restart.
+   */
+  needsWebflowRestart: boolean;
+
+  /**
+   * Collects the props from child elements and stores them.
+   * @param attributeKeys The attribute keys to use to collect the props.
+   * @returns Nothing, it mutates the passed `CMSItem` instances.
+   */
+  collectProps({
+    fieldKey,
+    typeKey,
+    rangeKey,
+  }: {
+    fieldKey: string;
+    typeKey?: string;
+    rangeKey?: string;
+  }): void;
+}
+
+interface CMSItemProps {
+  [key: string]: {
+    /**
+     * Defines the prop values.
+     */
+    values: Set<string>;
+
+    /**
+     * Defines the elements that hold the prop values.
+     * The Map is used as [propValue, data].
+     */
+    elements: Map<
+      string,
+      {
+        /**
+         * The prop element.
+         */
+        element: HTMLElement;
+
+        /**
+         * Stores the original outer HTML of the element before any mutations.
+         */
+        originalHTML: string;
+      }
+    >;
+
+    /**
+     * Defines filter values to highlight in a Map like:
+     * ```
+     * [propValue, data]
+     * ```
+     */
+    highlightData?: Map<string, { filterValue?: string; highlightCSSClass: string }>;
+
+    /**
+     * Defines the type of the value.
+     * @example `date`
+     */
+    type?: string | null;
+
+    /**
+     * Defines the mode of the prop.
+     * @example `from` | `to`.
+     */
+    range?: string | null;
+  };
 }

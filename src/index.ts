@@ -1,5 +1,8 @@
 import type { CMSFilters } from './types/CMSFilters';
-import type { Product } from './types';
+import type { Product, RootObject, Record, Fields } from './types';
+
+const AIRTABLE_API_KEY =
+  'patnJ0fyGVoolVpG3.9ec6315f9b214d4101c1ebd87dd7e19aa0bbc5e72c79ed158aaf4fb9075026b9';
 
 const skeletonDiv = document.querySelectorAll('.skeleton-loader');
 
@@ -22,17 +25,17 @@ window.fsAttributes.push([
 
     // Fetch external data
     const products = await fetchProducts();
+    const productAirTable = await fetchProductsFromAirtable();
 
     // Remove existing items
-
-    console.log(skeletonDiv);
     skeletonDiv.forEach((element) => element.parentNode?.removeChild(element));
-
     listInstance.clearItems();
 
     // Create the new items
-    const newItems = products.map((product) => createItem(product, itemTemplateElement));
-
+    //const newItems = products.map((product) => createItem(product, itemTemplateElement));
+    const newItems = productAirTable.map((product: any) =>
+      createItem(product.fields, itemTemplateElement)
+    );
     // Populate the list
     await listInstance.addItems(newItems);
 
@@ -49,8 +52,8 @@ window.fsAttributes.push([
     filterTemplateElement.remove();
 
     // Collect the categories
-    const categories = collectCategories(products);
 
+    const categories = collectCategories(productAirTable);
     // Create the new filters and append the to the parent wrapper
     for (const category of categories) {
       const newFilter = createFilter(category, filterTemplateElement);
@@ -79,6 +82,18 @@ const fetchProducts = async () => {
   }
 };
 
+const fetchProductsFromAirtable = async () => {
+  try {
+    const response = await fetch('https://api.airtable.com/v0/appQgouIDjYLh8mko/Furniture', {
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
+    });
+    const data: any = await response.json();
+    return data.records;
+  } catch (error) {
+    return [];
+  }
+};
+
 /**
  * Creates an item from the template element.
  * @param product The product data to create the item from.
@@ -86,10 +101,10 @@ const fetchProducts = async () => {
  *
  * @returns A new Collection Item element.
  */
-const createItem = (product: Product, templateElement: HTMLDivElement) => {
+const createItem = (product: any, templateElement: HTMLDivElement) => {
   // Clone the template element
   const newItem = templateElement.cloneNode(true) as HTMLDivElement;
-
+  console.log(product);
   // Query inner elements
   const image = newItem.querySelector<HTMLImageElement>('[data-element="image"]');
   const title = newItem.querySelector<HTMLHeadingElement>('[data-element="title"]');
@@ -98,12 +113,11 @@ const createItem = (product: Product, templateElement: HTMLDivElement) => {
   const price = newItem.querySelector<HTMLDivElement>('[data-element="price"]');
 
   // Populate inner elements
-  if (image) image.src = product.image;
-  if (title) title.textContent = product.title;
-  if (category) category.textContent = product.category;
-  if (description) description.textContent = product.description;
-  if (price) price.textContent = product.price.toString();
-
+  if (image) image.src = product.Images[0].url;
+  if (title) title.textContent = product.Name;
+  if (category) category.textContent = product.Category;
+  if (description) description.textContent = product.Description;
+  if (price) price.textContent = product.Price.toString();
   return newItem;
 };
 
@@ -113,11 +127,14 @@ const createItem = (product: Product, templateElement: HTMLDivElement) => {
  *
  * @returns An array of {@link Product} categories.
  */
-const collectCategories = (products: Product[]) => {
-  const categories: Set<Product['category']> = new Set();
 
-  for (const { category } of products) {
-    categories.add(category);
+const collectCategories = (records: Record[]) => {
+  const categories: Set<string> = new Set();
+
+  for (const {
+    fields: { Category },
+  } of records) {
+    categories.add(Category);
   }
 
   return [...categories];
@@ -130,7 +147,7 @@ const collectCategories = (products: Product[]) => {
  *
  * @returns A new category radio filter.
  */
-const createFilter = (category: Product['category'], templateElement: HTMLLabelElement) => {
+const createFilter = (category: string, templateElement: HTMLLabelElement) => {
   // Clone the template element
   const newFilter = templateElement.cloneNode(true) as HTMLLabelElement;
 
